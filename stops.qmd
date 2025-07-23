@@ -1,0 +1,30 @@
+---
+title: "Stops"
+format: html
+# In YAML header:
+execute:
+  echo: false
+  message: false
+  warning: false
+
+---
+
+
+```{r}
+library(tidyverse)
+library(primer.data)
+```
+
+
+```{r}
+#| label: eda
+x <- stops |>
+  filter(race %in% c("black", "white")) |>
+  mutate(race = str_to_title(race),
+         sex = str_to_title(sex))
+
+```
+
+# Summary:
+Differences in how people are treated by the police based on race are an important issue in government policy and fairness. This study uses traffic stop data from New Orleans, collected by the Open Policing Project, to look at differences in arrest rates between Black and White drivers.
+We are studying traffic stop data from New Orleans to see if Black and White drivers have different chances of getting arrested. We use this data to understand patterns in a larger population and apply them to our Preceptor Table. One issue is that the data may not represent all types of drivers or traffic stops, which could make our findings biased.
