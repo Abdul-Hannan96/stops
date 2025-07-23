@@ -6,6 +6,7 @@ execute:
   echo: false
   message: false
   warning: false
+  freeze: true
 
 ---
 
@@ -13,8 +14,20 @@ execute:
 ```{r}
 library(tidyverse)
 library(primer.data)
-```
+library(broom)
+library(tidymodels)
+library(gt)
+library(marginaleffects)
+library(tidytext)
 
+```
+$$
+P(Y = 1) = \frac{1}{1 + e^{-(\beta_0 + \beta_1X_1 + \beta_2X_2 + \cdots + \beta_nX_n)}}
+with
+Y \sim \text{Bernoulli}(\rho)
+$$
+
+It shows how we estimate the chance of something happening (like being arrested), based on different variables like race, sex, etc.
 
 ```{r}
 #| label: eda
@@ -22,9 +35,82 @@ x <- stops |>
   filter(race %in% c("black", "white")) |>
   mutate(race = str_to_title(race),
          sex = str_to_title(sex))
+x <- x %>%
+  mutate(arrested = as.factor(arrested))
+
+
+
+```
+<br>
+<br>
+<br>
+$$
+\widehat{\text{arrested}} = 0.177 
++ 0.0614 \cdot \text{sex}_{\text{Male}} 
+- 0.0445 \cdot \text{race}_{\text{White}} 
++ 0.0146 \cdot \text{zone}_{\text{B}} 
++ \ldots
++ \text{(interaction terms)}
+$$
+
+```{r}
+#| cache: true
+fit_stops <- logistic_reg(engine = "glm", mode = "classification") %>%
+  fit(arrested ~ sex + race * zone, data = x)
+
+
+```
+
+```{r}
+# tidy data
+
+tidy(fit_stops, conf.int = TRUE) %>%
+  select(term, estimate, conf.low, conf.high) %>%
+  gt() %>%
+  tab_header(title = "Logistic Regression Estimates") %>%
+  fmt_number(columns = 2:4, decimals = 3) %>%
+  tab_spanner(
+    label = "95% Confidence Interval",
+    columns = c(conf.low, conf.high)
+  )
+
+
+
+```
+
+<br>
+<br>
+
+```{r}
+#| cache: true
+plot_predictions(fit_stops$fit,
+                 newdata = "balanced",
+                 condition = c("zone", "race", "sex"),
+                 draw = FALSE) |> 
+  as_tibble() |> 
+  group_by(zone, sex) |> 
+  mutate(sort_order = estimate[race == "Black"]) |> 
+  ungroup() |> 
+  mutate(zone = reorder_within(zone, sort_order, sex)) |> 
+  ggplot(aes(x = zone, color = race)) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), 
+                width = 0.2, position = position_dodge(width = 0.5)) +
+  geom_point(aes(y = estimate), 
+             size = 1, position = position_dodge(width = 0.5)) +
+  facet_wrap(~ sex, scales = "free_x") +
+  scale_x_reordered() +
+  theme(axis.text.x = element_text(size = 8)) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Predicted Arrest Rates by Race, Sex, and Zone",
+    subtitle = "Black drivers—especially males—face higher predicted arrest rates in most zones",
+    caption = "Source: Open Policing Project — New Orleans Traffic Stop Data",
+    y = "Predicted Arrest Probability",
+    x = "Zone"
+  )
 
 ```
 
 # Summary:
 Differences in how people are treated by the police based on race are an important issue in government policy and fairness. This study uses traffic stop data from New Orleans, collected by the Open Policing Project, to look at differences in arrest rates between Black and White drivers.
-We are studying traffic stop data from New Orleans to see if Black and White drivers have different chances of getting arrested. We use this data to understand patterns in a larger population and apply them to our Preceptor Table. One issue is that the data may not represent all types of drivers or traffic stops, which could make our findings biased.
+We are studying traffic stop data from New Orleans to see if Black and White drivers have different chances of getting arrested. We use this data to understand patterns in a larger population and apply them to our Preceptor Table. One issue is that the data may not represent all types of drivers or traffic stops, which could make our findings biased.We model the likelihood of being arrested — a binary outcome — as a logistic function of a person’s sex, race, and the zone where the stop happened, including interactions between race and zone.The predicted arrest rate for Black males is 32%, compared to 24% for White females, with a 95% confidence interval of roughly ±2%.
